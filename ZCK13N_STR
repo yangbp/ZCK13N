@@ -1,0 +1,48 @@
+@EndUserText.label : 'ALV Structure'
+@AbapCatalog.enhancementCategory : #NOT_CLASSIFIED
+define structure zck13n {
+  level                       : abap.int2;
+  include bapicostre;
+  costing_variant             : ck_klvar;
+  @Semantics.quantity.unitOfMeasure : 'keko.meins'
+  lotsize                     : ck_losgr;
+  lotsize_unit                : lotsize_unit;
+  itemization_exists          : itemization_exists;
+  assembly                    : assembly;
+  cost_component_split_exists : cost_component_split_exists;
+  cost_component_cumulation   : cost_component_cumulation;
+  no_authority                : no_authority;
+  include bapiinclcostestitemexplosion;
+  profit_ctr                  : prctr;
+  material_external           : mgv_material_external;
+  material_guid               : mgv_material_guid;
+  material_version            : mgv_material_version;
+  lotsize_independant         : xfeld;
+  vltn_date                   : ck_bwdat;
+  co_area                     : kokrs;
+  mixed_costing               : xfeld;
+  proc_alt                    : ckml_ng_balt;
+  proc_alt_text               : ckml_nu_balt;
+  proc_alt_cstg_num           : ck_kalnr;
+  val_type                    : bwtar_d;
+  base_planning_object_number : extnr;
+  service_number              : asnum;
+  resou                       : kkb_resou;
+  matkl                       : matkl;
+  ktext                       : kkb_ktext;
+  maktx                       : maktx;
+  matnr                       : matnr;
+  lifnr                       : lifnr;
+  elehk                       : ck_elesmhk;
+  elemt                       : ck_element;
+  txele                       : ck_txele;
+  beskz                       : beskz;
+  sobsl                       : sobsl;
+  mtart                       : mtart;
+  color                       : abap.char(4);
+  ctgry                       : name4_gp;
+  cpmtr                       : matnr;
+  seq                         : seq;
+  fbmtr                       : matnr;
+
+}
