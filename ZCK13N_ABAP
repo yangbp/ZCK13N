@@ -1,0 +1,392 @@
+*&---------------------------------------------------------------------*
+*& Report ZMMR008
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT zmmr008.
+TYPE-POOLS:slis.
+
+TABLES:keko,ckis,mara,ckit,tck03,bapicostes.
+DATA:g_bwvar TYPE ck_bwvar,
+     g_tvers TYPE ck_tvers.
+
+DATA:BEGIN OF g_it_kalnr OCCURS 0,
+       matnr TYPE matnr,       "Material Number
+       kadky TYPE ck_kadky,    "Costing Date (Key)
+       kalnr TYPE ck_kalnr1,   "Cost Estimate Number - Product Costing
+       bzobj TYPE ck_obj,      "Reference Object
+       kalka TYPE ck_kalka,    "Costing Type
+       tvers TYPE ck_tvers,    "Costing Version
+       bwvar TYPE ck_bwvar,    "Valuation Variant in Costing
+       kkzma TYPE ck_kkzma,    "Costs Entered Manually in Additive or Automatic Cost Est.
+       kadat TYPE ck_abdat,    "Costing Date From
+       bidat TYPE ck_bidat,    "Costing Date To
+     END OF g_it_kalnr.
+
+DATA:g_it_data LIKE TABLE OF zck13n WITH HEADER LINE.
+
+DATA:"g_it_ckh3  LIKE TABLE OF v_ckh3 WITH HEADER LINE,
+  BEGIN OF g_it_tckh3 OCCURS 0 ,
+    elehk TYPE ck_elesmhk,
+    elemt TYPE ck_element,
+    txele TYPE ck_txele,
+  END OF g_it_tckh3,
+  g_it_tckh2 LIKE TABLE OF tckh2 WITH HEADER LINE.
+
+DATA:BEGIN OF g_it_marc OCCURS 0,
+       matnr TYPE matnr,
+       werks TYPE werks_d,
+       mtart TYPE mtart,
+       beskz TYPE beskz,    "Procurement Type
+       sobsl TYPE sobsl,    "Special procurement type
+     END OF g_it_marc.
+
+RANGES range_it_matnr FOR mara-matnr.
+
+SELECTION-SCREEN BEGIN OF BLOCK select_opt WITH FRAME TITLE TEXT-000.
+SELECT-OPTIONS:s_matnr FOR  mara-matnr ."MEMORY ID mat .
+PARAMETERS    :p_werks TYPE werks_d OBLIGATORY  MEMORY ID wrk ,
+               p_klvar TYPE keko-klvar OBLIGATORY DEFAULT 'ZPC8',
+               p_tvers TYPE keko-tvers OBLIGATORY DEFAULT '01',
+               p_amdat TYPE ck_amdat OBLIGATORY,
+               p_fsta  TYPE ck_feh_sta , "OBLIGATORY DEFAULT 'FR',
+               p_view  TYPE bapicostes-view OBLIGATORY DEFAULT '04',
+               p_depth TYPE bapicostes-explosion_depth DEFAULT ''.
+
+SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 1(31) TEXT-001 FOR FIELD m_leve.
+PARAMETERS:m_leve AS CHECKBOX DEFAULT ''.
+SELECTION-SCREEN END OF LINE.
+
+SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 1(31) TEXT-002 FOR FIELD itemcat.
+PARAMETERS:itemcat AS CHECKBOX .
+SELECTION-SCREEN END OF LINE.
+SELECTION-SCREEN END OF BLOCK select_opt.
+
+INCLUDE zck13n_alv .
+
+INITIALIZATION.
+  DATA:l_date TYPE datum.
+  CALL FUNCTION 'DATE_GET_PERIOD'
+    EXPORTING
+      iv_date      = sy-datum
+      iv_periodid  = 'M'
+*     IV_PERIODS   = 1
+*     IV_MRPPP     =
+*     IV_WERKS     =
+*     IV_PERIV     =
+    IMPORTING
+*     EV_PERIODSTART       =
+      ev_periodend = l_date
+    EXCEPTIONS
+      error        = 1
+      OTHERS       = 2.
+  IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+  p_amdat = l_date + 1.
+
+START-OF-SELECTION.
+  PERFORM con_parameter.
+  PERFORM get_data.
+  PERFORM handle_data.
+  PERFORM pf_show_alv TABLES g_it_data[]..
+
+*&---------------------------------------------------------------------*
+*&      Form  con_parameter
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM con_parameter.
+  CLEAR range_it_matnr.
+  CLEAR range_it_matnr[].
+
+  range_it_matnr-sign   = 'I'.
+  range_it_matnr-option = 'CP'.
+  range_it_matnr-low    = '7*'.
+  APPEND range_it_matnr TO range_it_matnr.
+
+  CLEAR:g_bwvar,g_tvers.
+  SELECT SINGLE bwvar INTO g_bwvar FROM tck03
+    WHERE klvar = p_klvar.
+
+  CLEAR:g_it_kalnr,g_it_kalnr[].
+  IF s_matnr[] IS INITIAL.
+    IF p_fsta IS INITIAL.
+      SELECT matnr kadky kalnr bzobj kalka tvers bwvar kkzma kadat bidat
+        INTO CORRESPONDING FIELDS OF TABLE g_it_kalnr
+        FROM keko
+       WHERE matnr IN s_matnr
+         AND matnr IN range_it_matnr
+         AND kadat <= p_amdat
+         AND bidat >= p_amdat
+         AND werks = p_werks
+         AND tvers = p_tvers
+         AND bwvar = g_bwvar
+*       AND feh_sta = p_fsta
+     .
+    ELSE.
+      SELECT matnr kadky kalnr bzobj kalka tvers bwvar kkzma kadat bidat
+        INTO CORRESPONDING FIELDS OF TABLE g_it_kalnr
+        FROM keko
+       WHERE matnr IN s_matnr
+         AND matnr IN range_it_matnr
+         AND kadat <= p_amdat
+         AND bidat >= p_amdat
+         AND werks = p_werks
+         AND tvers = p_tvers
+         AND bwvar = g_bwvar
+         AND feh_sta = p_fsta
+         .
+    ENDIF.
+  ELSE.
+    IF p_fsta IS INITIAL.
+      SELECT matnr kadky kalnr bzobj kalka tvers bwvar kkzma kadat bidat
+       INTO CORRESPONDING FIELDS OF TABLE g_it_kalnr
+       FROM keko
+      WHERE matnr IN s_matnr
+        AND kadat <= p_amdat
+        AND bidat >= p_amdat
+        AND werks = p_werks
+        AND tvers = p_tvers
+        AND bwvar = g_bwvar
+*       AND feh_sta = p_fsta
+    .
+    ELSE.
+      SELECT matnr kadky kalnr bzobj kalka tvers bwvar kkzma kadat bidat
+        INTO CORRESPONDING FIELDS OF TABLE g_it_kalnr
+        FROM keko
+       WHERE matnr IN s_matnr
+         AND kadat <= p_amdat
+         AND bidat >= p_amdat
+         AND werks = p_werks
+         AND tvers = p_tvers
+         AND bwvar = g_bwvar
+         AND feh_sta = p_fsta
+         .
+    ENDIF.
+  ENDIF.
+
+  SORT g_it_kalnr BY matnr kadky DESCENDING kkzma DESCENDING.
+  DELETE ADJACENT DUPLICATES FROM g_it_kalnr COMPARING matnr.
+  SORT g_it_kalnr BY matnr kalnr.
+ENDFORM.                    "con_parameter
+
+*&---------------------------------------------------------------------*
+*&      Form  get_data
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM get_data.
+  DATA:l_it_elist       LIKE TABLE OF bapiexplosionlist WITH HEADER LINE,
+       l_explosion_incp LIKE bapicostes-explosion_incp.
+
+  DATA:l_it_tmp LIKE TABLE OF zck13n WITH HEADER LINE.
+
+  CLEAR:g_it_data,g_it_data[],
+        g_it_marc,g_it_marc[].
+
+  LOOP AT g_it_kalnr.
+    CLEAR:l_it_elist,l_it_elist[].
+    CALL FUNCTION 'BAPI_COSTESTIMATE_GETEXPLOSION'
+      EXPORTING
+        referenceobject      = g_it_kalnr-bzobj
+        costingnumber        = g_it_kalnr-kalnr
+        costingtype          = g_it_kalnr-kalka
+        costingdate          = g_it_kalnr-kadky
+        costingversion       = g_it_kalnr-tvers
+        valuationvariant     = g_it_kalnr-bwvar
+        enteredmanually      = ' '
+        cost_component_view  = p_view                 "'01'
+        explosion_depth      = p_depth                "'99'
+*       lot_size             = '100'
+      IMPORTING
+        explosion_incomplete = l_explosion_incp
+*       RETURN               =
+      TABLES
+        explosion_list       = l_it_elist.
+
+    LOOP AT l_it_elist .
+      MOVE-CORRESPONDING l_it_elist TO g_it_data.
+      g_it_data-matnr40 = g_it_kalnr-matnr.
+      APPEND g_it_data.
+      CLEAR l_it_elist.CLEAR g_it_data.
+    ENDLOOP.
+  ENDLOOP.
+
+  IF m_leve <> 'X'.
+    DELETE g_it_data WHERE item_category = 'M' AND assembly = 'X'.
+    DELETE g_it_data WHERE cost_element  = ''.
+  ENDIF.
+
+  "Show Delivery Costs Record
+  IF itemcat <> 'X'.
+    DELETE g_it_data WHERE item_category = 'I'.
+  ENDIF.
+
+  IF g_it_data[] IS NOT INITIAL.
+    SELECT a~elehk a~elemt txele INTO CORRESPONDING FIELDS OF TABLE g_it_tckh3
+      FROM tckh3 AS a INNER JOIN tckh1 AS b ON a~elemt = b~elemt AND a~elehk = b~elehk
+      WHERE a~elehk = 'HH'
+        AND spras = sy-langu.
+
+    SELECT * INTO CORRESPONDING FIELDS OF TABLE g_it_tckh2
+      FROM tckh2
+      WHERE elehk = 'HH'
+        AND ktopl = 'HHJT'.
+  ENDIF.
+
+  l_it_tmp[] = g_it_data[].
+  DELETE l_it_tmp WHERE material = ''.
+  SORT l_it_tmp BY material.
+  DELETE ADJACENT DUPLICATES FROM l_it_tmp COMPARING material.
+  IF NOT l_it_tmp[] IS INITIAL.
+    "Get procurement type and Special procurement type
+    SELECT a~matnr werks mtart beskz sobsl INTO CORRESPONDING FIELDS OF TABLE g_it_marc
+      FROM marc AS a INNER JOIN mara AS b ON a~matnr = b~matnr
+      FOR ALL ENTRIES IN g_it_data
+      WHERE a~matnr = g_it_data-matnr40
+        AND werks = p_werks.
+    SORT g_it_marc BY matnr.
+  ENDIF.
+ENDFORM.                    "get_data
+
+
+
+*&---------------------------------------------------------------------*
+*&      Form  handle_data
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM handle_data.
+  DATA:l_it_data LIKE TABLE OF g_it_data WITH HEADER LINE.
+  DATA:BEGIN OF l_it_inrec OCCURS 0,
+         infnr TYPE infnr,
+         lifnr TYPE elifn,
+       END OF l_it_inrec.
+
+  DATA:l_it_t023t LIKE TABLE OF t023t WITH HEADER LINE,
+       l_it_makt  LIKE TABLE OF makt WITH HEADER LINE.
+
+  DATA:l_cost_center  TYPE kostl,
+       l_cost_element TYPE kstar,
+       l_lifnr        TYPE lifnr.
+
+  DATA: col_alv TYPE lvc_s_scol .
+
+  FIELD-SYMBOLS:<wa_data> TYPE zck13n.
+
+  SELECT * INTO TABLE l_it_t023t FROM t023t
+    WHERE spras = sy-langu.
+  SORT l_it_t023t BY matkl.
+
+  l_it_data[] = g_it_data[].
+  DELETE l_it_data WHERE perchasing_information_record = ''.
+  IF l_it_data[] IS NOT INITIAL.
+    SELECT infnr lifnr INTO TABLE l_it_inrec
+      FROM eina
+      FOR ALL ENTRIES IN l_it_data
+      WHERE infnr = l_it_data-perchasing_information_record.
+    SORT l_it_inrec BY infnr.
+  ENDIF.
+
+  l_it_data[] = g_it_data[].
+  SORT l_it_data BY material.
+  DELETE ADJACENT DUPLICATES FROM l_it_data COMPARING material.
+  IF NOT l_it_data[] IS INITIAL.
+    SELECT * INTO TABLE l_it_makt FROM makt
+      FOR ALL ENTRIES IN l_it_data
+      WHERE matnr = l_it_data-matnr40
+        AND spras = sy-langu.
+
+    SORT l_it_makt BY matnr.
+  ENDIF.
+
+  LOOP AT g_it_data ASSIGNING <wa_data> .
+    CLEAR:l_cost_center,l_cost_element.
+
+    CLEAR g_it_marc.
+    READ TABLE g_it_marc WITH KEY matnr = <wa_data>-material BINARY SEARCH.
+    <wa_data>-sobsl = g_it_marc-sobsl.
+    <wa_data>-beskz = g_it_marc-beskz.
+    <wa_data>-mtart = g_it_marc-mtart.
+
+    CLEAR g_it_tckh2 .
+    LOOP AT g_it_tckh2 WHERE kstav <= <wa_data>-cost_element AND kstab >= <wa_data>-cost_element.
+      CLEAR g_it_tckh3.
+      READ TABLE g_it_tckh3 WITH KEY elehk = g_it_tckh2-elehk elemt = g_it_tckh2-elemt.
+      IF sy-subrc EQ 0.
+        <wa_data>-elemt = g_it_tckh3-elemt.
+        <wa_data>-txele = g_it_tckh3-txele.
+        CONCATENATE <wa_data>-elemt <wa_data>-txele INTO <wa_data>-txele SEPARATED BY space.
+        SHIFT <wa_data>-txele LEFT DELETING LEADING '0'.
+
+        <wa_data>-elehk = g_it_tckh3-elehk.
+      ENDIF.
+      CLEAR g_it_tckh2.
+      EXIT.
+    ENDLOOP.
+
+    <wa_data>-matkl = <wa_data>-material+0(3).
+
+    CLEAR l_it_t023t.
+    READ TABLE l_it_t023t WITH KEY matkl = <wa_data>-matkl BINARY SEARCH.
+    <wa_data>-ktext = l_it_t023t-wgbez.
+
+    CLEAR l_it_makt.
+    READ TABLE l_it_makt WITH KEY matnr = <wa_data>-material BINARY SEARCH.
+    <wa_data>-maktx = l_it_makt-maktx.
+
+    CASE <wa_data>-item_category.
+      WHEN 'M' OR 'I'.
+        CONCATENATE <wa_data>-plant <wa_data>-material INTO <wa_data>-resou SEPARATED BY space.
+      WHEN 'E'.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+          EXPORTING
+            input  = <wa_data>-cost_center
+          IMPORTING
+            output = l_cost_center.
+
+        CONCATENATE l_cost_center <wa_data>-work_center <wa_data>-activity_type INTO <wa_data>-resou SEPARATED BY space.
+      WHEN 'G'.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+          EXPORTING
+            input  = <wa_data>-cost_element
+          IMPORTING
+            output = l_cost_element.
+
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+          EXPORTING
+            input  = <wa_data>-cost_center
+          IMPORTING
+            output = l_cost_center.
+        CONCATENATE l_cost_center l_cost_element INTO <wa_data>-resou SEPARATED BY space.
+      WHEN 'L'.
+        CLEAR l_it_inrec.
+        READ TABLE l_it_inrec WITH KEY infnr = <wa_data>-perchasing_information_record BINARY SEARCH.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+          EXPORTING
+            input  = l_it_inrec-lifnr
+          IMPORTING
+            output = l_lifnr.
+        CONCATENATE l_lifnr <wa_data>-perchasing_information_record <wa_data>-perchasing_organization  INTO <wa_data>-resou SEPARATED BY space.
+        <wa_data>-lifnr = l_it_inrec-lifnr.
+    ENDCASE.
+
+    IF <wa_data>-item_category = 'M' AND <wa_data>-assembly = 'X'.
+      <wa_data>-color = 'C710'.
+    ENDIF.
+
+    IF  <wa_data>-item_category = 'I'.
+      <wa_data>-color = 'C510'.
+    ENDIF.
+
+    IF  <wa_data>-cost_element  = ''.
+      <wa_data>-color = 'C610'.
+    ENDIF.
+  ENDLOOP.
+
+ENDFORM.                    "handle_data
