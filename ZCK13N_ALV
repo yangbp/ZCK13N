@@ -1,0 +1,195 @@
+*&---------------------------------------------------------------------*
+*& 包含               ZCK13N_ALV
+*&---------------------------------------------------------------------*
+
+TYPE-POOLS: slis ,icon.
+*&---------------------------------------------------------------------*
+*&      Form  pf_show_alv
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->PT_OUTTAB  text
+*----------------------------------------------------------------------*
+FORM pf_show_alv TABLES pt_outtab.
+  DATA: ls_layout   TYPE slis_layout_alv,
+
+        lt_fieldcat TYPE slis_t_fieldcat_alv,
+        ls_fieldcat TYPE slis_fieldcat_alv.
+
+
+  DATA : lt_sort TYPE slis_t_sortinfo_alv,
+         ls_sort LIKE lvc_s_sort.
+
+
+**--ALV显示样式
+  PERFORM pf_alv_list_layout  USING ls_layout .
+**--ALV报表的字段设置
+  PERFORM pf_alv_list_fcat TABLES lt_fieldcat.
+**--定义排序字段
+  " PERFORM pf_alv_sub_sort TABLES lt_sort  .
+**----ALV报表显示
+  PERFORM pf_alv_list_disply TABLES pt_outtab  lt_fieldcat lt_sort  USING ls_layout .
+
+ENDFORM.                    "pf_show_alv
+*&---------------------------------------------------------------------*
+*&      Form  PF_ALV_LIST_LAYOUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_LS_LAYOUT  text
+*----------------------------------------------------------------------*
+FORM pf_alv_list_layout USING ps_layout TYPE slis_layout_alv .
+  CLEAR :  ps_layout.
+
+  ps_layout-colwidth_optimize    = 'X'.
+  ps_layout-detail_initial_lines = 'X'.
+  ps_layout-zebra                = 'X'.
+  ps_layout-box_fieldname        =  'SEL'.
+  ps_layout-info_fieldname       = 'COLOR'.
+ENDFORM. " PF_ALV_LIST_LAYOUT
+*&---------------------------------------------------------------------*
+*&      Form  PF_ALV_SUB_SORT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_LT_SORT  text
+*      -->P_TYPE  text
+*      -->P_SLIS_T_SORTINFO_ALV  text
+*----------------------------------------------------------------------*
+FORM pf_alv_sub_sort  TABLES   pt_sort TYPE slis_t_sortinfo_alv .
+  DATA :  ls_sort LIKE lvc_s_sort.
+
+ENDFORM.                    " PF_ALV_SUB_SORT
+*&---------------------------------------------------------------------*
+*&      Form  PF_ALV_LIST_FCAT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->PT_FIELDCAT  text
+*----------------------------------------------------------------------*
+FORM pf_alv_list_fcat TABLES pt_fieldcat TYPE slis_t_fieldcat_alv  .
+
+
+  DATA:it_fieldcat TYPE slis_t_fieldcat_alv,
+       wa_fieldcat LIKE LINE OF it_fieldcat.
+
+  FIELD-SYMBOLS:<wa> LIKE LINE OF it_fieldcat.
+
+  CALL FUNCTION 'REUSE_ALV_FIELDCATALOG_MERGE'
+    EXPORTING
+      i_structure_name       = 'ZCK13N'
+    CHANGING
+      ct_fieldcat            = pt_fieldcat[]
+    EXCEPTIONS
+      inconsistent_interface = 1
+      program_error          = 2
+      OTHERS                 = 3.
+
+  LOOP AT pt_fieldcat ASSIGNING <wa>.
+    CASE <wa>-fieldname.
+      WHEN 'MATNR40'.
+        <wa>-seltext_l    = 'FG Material'.
+        <wa>-seltext_m    = <wa>-seltext_l .
+        <wa>-seltext_s    = <wa>-seltext_l .
+        <wa>-reptext_ddic = <wa>-seltext_l .
+      WHEN 'LEVEL'.
+        <wa>-seltext_l    = 'Level'.
+        <wa>-seltext_m    = <wa>-seltext_l .
+        <wa>-seltext_s    = <wa>-seltext_l .
+        <wa>-reptext_ddic = <wa>-seltext_l .
+    ENDCASE.
+  ENDLOOP.
+
+ENDFORM .                    "pf_alv_list_fcat
+
+*&---------------------------------------------------------------------*
+*&      Form  PF_ALV_LIST_DISPLY
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->PT_OUTTAB  text
+*      -->LT_FIELDCAT  text
+*      -->LS_LAYOUT  text
+*----------------------------------------------------------------------*
+FORM pf_alv_list_disply TABLES pt_outtab pt_fieldcat TYPE slis_t_fieldcat_alv
+                                pt_sort  TYPE slis_t_sortinfo_alv
+                         USING ps_layout TYPE slis_layout_alv    .
+
+  DATA : l_pf_status_name TYPE slis_formname VALUE 'ALV_SET_PF_STATUS',
+         l_pf_comand_name TYPE slis_formname VALUE 'ALV_USER_COMMAND',
+
+         l_repid          LIKE sy-repid  VALUE sy-repid.
+
+*ALV数据显示函数
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program       = l_repid
+      i_callback_pf_status_set = l_pf_status_name
+      i_callback_user_command  = l_pf_comand_name
+      it_fieldcat              = pt_fieldcat[]
+      is_layout                = ps_layout
+      i_save                   = 'A'
+    TABLES
+      t_outtab                 = pt_outtab[].
+
+ENDFORM. " PF_ALV_LIST_DISPLY
+
+*&---------------------------------------------------------------------*
+*&      Form  sub_set_pf_status
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->RT_EXTAB   text
+*----------------------------------------------------------------------*
+FORM alv_set_pf_status USING rt_extab TYPE slis_t_extab.
+
+  DATA fcode TYPE TABLE OF sy-ucomm.
+
+  SET PF-STATUS 'STA' EXCLUDING fcode.
+  SET TITLEBAR 'CAPTION'.
+
+ENDFORM. "sub_set_pf_status
+
+*&---------------------------------------------------------------------*
+*&      Form  ALV_USER_COMMAND
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->R_UCOMM      text
+*      -->RS_SELFIELD  text
+*----------------------------------------------------------------------*
+FORM alv_user_command USING r_ucomm LIKE sy-ucomm
+                        rs_selfield TYPE slis_selfield. "响应ALV点击自定义按钮之后的事件
+  DATA: lr_grid  TYPE REF TO cl_gui_alv_grid,
+        lc_i     TYPE i,
+        lv_subrc TYPE sy-subrc.
+
+  CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+    IMPORTING
+      e_grid = lr_grid.
+  CALL METHOD lr_grid->check_changed_data.
+  rs_selfield-refresh = 'X'.
+
+*  DATA IT_PAGE LIKE TABLE OF ZMMR0002_STPAGE.
+  CASE r_ucomm.
+
+    WHEN 'BACK' OR 'EXIT'.
+      LEAVE PROGRAM .
+    WHEN 'CANCEL'.
+      LEAVE PROGRAM.
+  ENDCASE.
+
+ENDFORM. "ALV_USER_COMMAND
+*&---------------------------------------------------------------------*
+*&      Form  SET_FIELDCAT_NAME
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_TEXT  text
+*----------------------------------------------------------------------*
+FORM set_fieldcat_name  USING  ps_fieldcat TYPE slis_fieldcat_alv   p_text.
+  ps_fieldcat-seltext_l = p_text.
+  ps_fieldcat-seltext_m = p_text.
+  ps_fieldcat-seltext_s = p_text.
+  ps_fieldcat-reptext_ddic = p_text.
+ENDFORM.                    " SET_FIELDCAT_NAME
